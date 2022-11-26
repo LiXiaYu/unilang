@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2021-2022 UnionTech Software Technology Co.,Ltd.
 # Requires: LLVM 7.0 installed in some known location.
 # Usage: ./detect-llvm.sh, or sourced.
+# shellcheck disable=2016
 
 set -e
 
@@ -48,6 +50,7 @@ else
 echo 'LLVM support is disabled.'
 CXXFLAGS_EXTRA='-DUNILANG_NO_LLVM=1'
 # XXX: Some other dependencies are still needed.
+# shellcheck disable=2034
 LIBS_EXTRA='-lffi'
 
 fi
