@@ -6,13 +6,40 @@
     "configurations": [
         {
             "name": "Attach to Unilang with FEBio",
-            "type": "chrome",
+            "type": "cppdbg",
             "request": "attach",
-            "port": 9222,
-            "webRoot": "${workspaceFolder}/src",
-            "sourceMapPathOverrides": {
-                "webpack:///./src/*": "${webRoot}/*"
+            "program": "${workspaceFolder}/build/Unilang",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/local/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "sourceMap": {
+                "/home/zhengyuanbo/Unilang": "${workspaceFolder}"
             }
+        },
+        {
+            // run /home/wangxiaofei/FEBioStudio/bin/febio4 -i ./BPM_base_v4_BPM.feb -import /home/wangxiaofei/.vs/FEBio_VFM_Task/out/build/linux-release/FEBio_VFM_Task/libFEBio_VFM_Task.so -task=VFM vfm_set_BPM_base_v4_BPM.txt
+            "name": "Run FEBio",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/wangxiaofei/FEBioStudio/bin/febio4",
+            "args": [
+                "-i",
+                "./BPM_base_v4_BPM.feb",
+                "-import",
+                "/home/wangxiaofei/.vs/FEBio_VFM_Task/out/build/linux-release/FEBio_VFM_Task/libFEBio_VFM_Task.so",
+                "-task=VFM",
+                "vfm_set_BPM_base_v4_BPM.txt"
+            ],
+            "stopAtEntry": false,
+            "cwd": "/home/wangxiaofei/.febio/fe_p_test",
+            "environment": [],
         }
     ]
 }

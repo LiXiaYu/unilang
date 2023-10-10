@@ -1512,17 +1512,17 @@ int unilang_regist_type_value(const char* objectname, _type* object)
 	return 0;
 }
 
-extern "C" __declspec(dllexport) int
+extern "C" YF_API int
 unilang_regist_int_value(const char* objectname,int* object)
 {
 	return unilang_regist_type_value(objectname, object);
 }
-extern "C" __declspec(dllexport) int
+extern "C" YF_API int
 unilang_regist_double_value(const char* objectname,double* object)
 {
 	return unilang_regist_type_value(objectname, object);
 }
-extern "C" __declspec(dllexport) int
+extern "C" YF_API int
 unilang_regist_bool_value(const char* objectname,bool* object)
 {
 	return unilang_regist_type_value(objectname, object);
@@ -1654,7 +1654,37 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 	}
 }
 
-extern "C" __declspec(dllexport) int
+Unilang::ReductionStatus
+_ReduceCombining(Unilang::TermNode& term, Unilang::Context& ctx)
+{
+	assert(IsCombiningTerm(term) && "Invalid term found.");
+	AssertValueTags(term);
+	if(!IsSingleElementList(term))
+	{
+		AssertNextTerm(ctx, term);
+		ctx.LastStatus = Unilang::ReductionStatus::Neutral;
+		if(IsEmpty(AccessFirstSubterm(term)))
+			RemoveHead(term);
+		assert(IsBranch(term));
+		ctx.SetCombiningTermRef(term);
+		return ReduceSubsequent(AccessFirstSubterm(term), ctx,
+			Unilang::NameTypedReducerHandler(std::bind(Unilang::ReduceCombinedBranch,
+			std::ref(term), std::placeholders::_1), "eval-combine-operands"));
+	}
+
+	// NOTE: The following is necessary to prevent unbounded overflow in
+	//	handling recursive subterms.
+	auto term_ref(ystdex::ref(term));
+
+	ystdex::retry_on_cond([&]{
+		return IsSingleElementList(term_ref);
+	}, [&]{
+		term_ref = AccessFirstSubterm(term_ref);
+	});
+	return ReduceOnceLifted(term, ctx, term_ref);
+}
+
+extern "C" YF_API int
 unilang_regist_function_var(const char* objectname, void** object, const char* result_type, const int parameters_number, const char **parameters_type)
 {
 	
@@ -1834,14 +1864,15 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 		printf("*object: %d\n", *object);
 		//unilang function y
 		// set object (void**) function pointer pointer to y
+		//_ReduceCombining(y,ctx);
 
-		Unilang::Continuation call_y(Unilang::NameTypedContextHandler([&y]{
+		// 帝球请改这里：🙏
+		Unilang::Continuation call_y(Unilang::NameTypedContextHandler([&y,&ctx]{
 			return Unilang::ReduceForLiftedResult(y);
 		},objectname_s), ctx);
-
-
 		auto& handler=call_y.Handler;
-		//auto& handler = type_y.target<Unilang::FormContextHandler>()->Handler;
+
+		//auto& handler = y.Value.Access<Unilang::FormContextHandler>().Handler;
 
 		printf("handler: %p\n", &handler);
 
@@ -1872,8 +1903,208 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 	return 0;
 }
 
+struct reff_F
+{
+	void* pfn;
 
-extern "C" __declspec(dllexport) int
+	platform::strings::string s_ret_type;
+	platform::containers::vector<platform::strings::string> s_param_types;
+
+	ffi_type* result_type;
+	platform::containers::vector<ffi_type *> param_types;
+
+	ffi_cif cif;
+
+	Unilang::ReductionStatus operator ()(Unilang::TermNode& term, Unilang::Context& c)
+	{
+		int parameters_number=s_param_types.size();
+
+		void** args=new void*[parameters_number];	
+		int* nums=new int[parameters_number];	
+
+		int idx=0;
+		auto i(std::next(term.begin()));
+		printf("size: %d\n", s_param_types.size());
+		for(const auto& s_ptype : s_param_types)
+		{
+			printf("%s\n", s_ptype.c_str());
+			// create ffi_type for each parameter's typename and push it to param_types
+			ffi_type* ffi_ptype=get_ffi_type_by_string(s_ptype);
+			param_types.push_back(ffi_ptype);
+			
+			const auto& s_param_term(*i++);
+
+			if(s_ptype=="int")
+			{
+				args[idx]=new int(s_param_term.Value.GetObject<int>());
+				printf("%d\n", s_param_term.Value.GetObject<int>());
+				nums[idx]=1;
+			}
+			else if(s_ptype=="double")
+			{
+				args[idx]=new double(s_param_term.Value.GetObject<double>());
+				nums[idx]=1;
+			}
+			else if(s_ptype=="bool")
+			{
+				args[idx]=new bool(s_param_term.Value.GetObject<bool>());
+				nums[idx]=1;
+			}
+			else if(s_ptype=="string")
+			{
+				auto& s(s_param_term.Value.GetObject<platform::strings::string>());
+				args[idx]=new char[s.size()+1];
+				strcpy((char*)(args[idx]), s.c_str());
+				nums[idx]=s.size()+1;
+			}
+			else
+			{
+				throw Unilang::UnilangException("Unknown parameter type found.");
+			}
+
+			idx++;
+		}
+
+		switch(::ffi_prep_cif(&cif, ffi_abi::FFI_DEFAULT_ABI, YSLib::CheckUpperBound<
+				unsigned>(param_types.size()), result_type, param_types.data()))
+			{
+			case FFI_OK: {
+				printf("FFI_OK\n");
+				void* result;
+
+				if(s_ret_type=="int")
+				{
+					result=new int;
+				}
+				else if(s_ret_type=="double")
+				{
+					result=new double;
+				}
+				else if(s_ret_type=="bool")
+				{
+					result=new bool;
+				}
+				else if(s_ret_type=="string")
+				{
+					result = new char[100];
+				}
+				else
+				{
+					throw Unilang::UnilangException("Unknown parameter type found.");
+				}
+
+				printf("function: %d\n", pfn);
+				ffi_call(const_cast<ffi_cif*>(&cif), (void (*)())pfn, result, args);
+				printf("%d\n", *(int*)result);
+				
+
+				// delete args
+				for(int i=0;i<parameters_number;i++)
+				{
+					if(s_param_types[i]=="int")
+					{
+						delete (int*)args[i];
+					}
+					else if(s_param_types[i]=="double")
+					{
+						delete (double*)args[i];
+					}
+					else if(s_param_types[i]=="bool")
+					{
+						delete (bool*)args[i];
+					}
+					else if(s_param_types[i]=="string")
+					{
+						delete[] (char*)args[i];
+					}
+					else
+					{
+						throw Unilang::UnilangException("Unknown parameter type found.");
+					}
+				}		
+				delete[] args;
+
+				// delete result and set term.Value
+				if(s_ret_type=="int")
+				{
+					term.Value=Unilang::ValueObject(*(int*)result, YSLib::OwnershipTag<>());
+					delete (int*)result;
+				}
+				else if(s_ret_type=="double")
+				{
+					term.Value=Unilang::ValueObject(*(double*)result, YSLib::OwnershipTag<>());
+					delete (double*)result;
+				}
+				else if(s_ret_type=="bool")
+				{
+					term.Value=Unilang::ValueObject(*(bool*)result, YSLib::OwnershipTag<>());
+					delete (bool*)result;
+				}
+				else if(s_ret_type=="string")
+				{
+					term.Value=platform::strings::string((char*)result);
+					delete[] (char*)result;
+				}
+				else
+				{
+					throw Unilang::UnilangException("Unknown parameter type found.");
+				}
+
+				break;
+			}
+			case FFI_BAD_ABI:
+				throw Unilang::UnilangException("FFI_BAD_ABI");
+			case FFI_BAD_TYPEDEF:
+				throw Unilang::UnilangException("FFI_BAD_TYPEDEF");
+			default:
+				throw Unilang::UnilangException("Unknown error in '::ffi_prep_cif' found.");
+			}
+
+		return Unilang::ReductionStatus::Retained;
+	}
+};
+
+extern "C" YF_API int
+unilang_regist_function_var__ref(const char* objectname, void** object, const char* result_type, const int parameters_number, const char **parameters_type)
+{
+		
+	int result = 0; 
+
+	printf("object: %d\n", object);
+	printf("*object: %d\n", *object);
+
+	platform::strings::string s_ret_type;
+	platform::containers::vector<platform::strings::string> s_param_types(parameters_number);
+
+	s_ret_type = result_type;
+
+	for (int i = 0; i < parameters_number; i++)
+	{
+		platform::strings::string s_pt(parameters_type[i]);
+		s_param_types[i]=s_pt;
+	}
+
+
+
+
+	platform::strings::string objectname_s(objectname);
+	ma_ex.insert(std::make_pair(objectname_s, std::move(std::forward_as_tuple(object, 
+		[objectname_s, object, parameters_number, s_param_types, s_ret_type](Unilang::BindingMap& m){
+			reff_F f;
+			f.pfn=*object;
+
+			Unilang::FormContextHandler handler(f);
+			Unilang::ContextHandler ch(handler);
+
+			Unilang::Environment::DefineChecked(m, platform::strings::string_view(objectname_s), YSLib::ValueObject(ch, YSLib::OwnershipTag<>()));
+		},
+		[objectname_s, &object, parameters_number, s_param_types, s_ret_type](Unilang::TermNode& x, Unilang::TermNode& y, Unilang::Context& ctx){
+
+		}))));
+
+}
+
+extern "C" YF_API int
 unilang_load_file(char* filename)
 {
 	int argc = 1;
@@ -1927,6 +2158,11 @@ unilang_load_file(char* filename)
 						ThrowNonmodifiableErrorForAssignee();
 					return ValueToken::Unspecified;
 			});
+
+			// Unilang::Forms::RegisterBinary<Strict>(m,"reff<-",[&m](TermNode&& x, TermNode&& y) -> ValueObject{
+			// 	reff_F& fun(AccessRegular<reff_F>(x,true));
+			// 	fun.pfn=y.Value.GetObject<void*>();
+			// });
 
 			// register external variables
 			for(auto it=ma_ex.begin();it!=ma_ex.end();it++)

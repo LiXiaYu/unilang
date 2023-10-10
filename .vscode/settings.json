@@ -97,6 +97,12 @@
         "unordered_set": "cpp",
         "valarray": "cpp",
         "any": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "*.tcc": "cpp",
+        "shared_mutex": "cpp",
+        "string_view": "cpp",
+        "__config": "cpp",
+        "__debug": "cpp",
+        "__verbose_abort": "cpp"
     }
 }

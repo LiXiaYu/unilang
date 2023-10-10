@@ -117,20 +117,20 @@ if test -z "$NoParallel" && hash parallel 2> /dev/null && hash grep 2> \
 
 	# XXX: Value of several variables may contain whitespaces.
 	# shellcheck disable=2086
-	parallel --will-cite -q $Verbose_t_ "$CXX" -fPIC -c {} \
+	parallel --will-cite -q $Verbose_t_ "$CXX" -fPIC -c -g {} \
 -o"$Unilang_BuildDir/{#}.o" $CXXFLAGS $CXXFLAGS_EXTRA $CXXFLAGS_WKRD_ \
 $CXXFLAGS_Qt "${INCLUDES[@]}" ::: "${SRCS[@]}"
 
 	OFILES_=("$Unilang_BuildDir"/*.o)
 
 	# shellcheck disable=2086
-	Call_ "$CXX" "-shared" -o"$Unilang_Output".dll -Wl,--out-implib,"$Unilang_Output".lib "${OFILES_[@]}" $LDFLAGS $LIBS $LIBS_Qt \
+	Call_ "$CXX" "-shared" -g -o"$Unilang_Output".dll -Wl,--out-implib,"$Unilang_Output".lib "${OFILES_[@]}" $LDFLAGS $LIBS $LIBS_Qt \
 $LIBS_EXTRA
 else
 	echo 'Not using parallel.'
 
 	# shellcheck disable=2086
-	Call_ "$CXX" "-shared" -o"$Unilang_Output".dll -Wl,--out-implib,"$Unilang_Output".lib $CXXFLAGS $CXXFLAGS_EXTRA $CXXFLAGS_WKRD_ \
+	Call_ "$CXX" "-shared" -g -o"$Unilang_Output".dll -Wl,--out-implib,"$Unilang_Output".lib $CXXFLAGS $CXXFLAGS_EXTRA $CXXFLAGS_WKRD_ \
 $CXXFLAGS_Qt $LDFLAGS $LIBS_Qt "${INCLUDES[@]}" "${SRCS[@]}" $LIBS_EXTRA
 fi
 
