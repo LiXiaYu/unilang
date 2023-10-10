@@ -1554,7 +1554,7 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 			if(s_ptype=="int")
 			{
 				int x;
-				node_x.SetValue(Unilang::ValueObject(x, YSLib::OwnershipTag<>()));
+				node_x.SetValue(Unilang::ValueObject(x));
 			}
 			else if(s_ptype=="double")
 			{
@@ -1569,7 +1569,7 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 			else if(s_ptype=="string")
 			{
 				platform::strings::string x;
-				node_x.SetValue(Unilang::ValueObject(x, YSLib::OwnershipTag<>()));
+				node_x.SetValue(Unilang::ValueObject(x));
 			}
 			else
 			{
@@ -1583,7 +1583,7 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 			if(s_ptype=="int")
 			{
 				int y;
-				node_y.SetValue(Unilang::ValueObject(y, YSLib::OwnershipTag<>()));
+				node_y.SetValue(Unilang::ValueObject(y));
 			}
 			else if(s_ptype=="double")
 			{
@@ -1604,7 +1604,7 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 			{
 				throw Unilang::UnilangException("Unknown parameter type found.");
 			}
-			node_y.Add(node_y);
+			node_x.Add(node_y);
 		}
 	}
 
@@ -1613,12 +1613,13 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 	if(s_ret_type=="int")
 	{
 		int r;
-		node_r.SetValue(Unilang::ValueObject(r, YSLib::OwnershipTag<>()));
+		node_r.SetValue(Unilang::ValueObject(realpath));
 
 		printf("rrr: %p\n", r);
 		auto node_result=handler(node_x,ctx);
 		printf("rrr: %p\n", r);
-		*((int *)ret)=node_r.Value.GetObject<int>();
+		ret=new int;
+		*((int *)ret)=node_x.Value.GetObject<int>();
 	}
 	else if(s_ret_type=="double")
 	{
@@ -1865,39 +1866,54 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 		//unilang function y
 		// set object (void**) function pointer pointer to y
 		//_ReduceCombining(y,ctx);
+		
+		return Unilang::ReduceSubsequent(y, ctx,
+			Unilang::NameTypedReducerHandler(std::bind([&](Unilang::Context&,
+			const Unilang::TermNode& saved, const std::shared_ptr<Unilang::Environment>& p_e){
+				auto& handler=Unilang::AccessRegular<Unilang::ContextHandler>(y,false);
 
-		// 帝球请改这里：🙏
-		Unilang::Continuation call_y(Unilang::NameTypedContextHandler([&y,&ctx]{
-			return Unilang::ReduceForLiftedResult(y);
-		},objectname_s), ctx);
-		auto& handler=call_y.Handler;
 
-		//auto& handler = y.Value.Access<Unilang::FormContextHandler>().Handler;
+				Unilang::TermNode node_x;
+				int xx=3;
+				node_x.SetValue(Unilang::ValueObject(xx, YSLib::OwnershipTag<>()));
+				Unilang::TermNode node_y;
+				int yy=4;
+				node_y.SetValue(Unilang::ValueObject(yy, YSLib::OwnershipTag<>()));
 
-		printf("handler: %p\n", &handler);
+				node_x.Add(node_y);
+				
+				auto node_result=handler(node_x,ctx); //帝球康康这里！段错误
+				int result=node_x.Value.GetObject<int>();
+				printf("result: %d\n", result);
+				printf("handler: %p\n", &handler);
 
-		ffi_type* result_type=get_ffi_type_by_string(s_ret_type);
-		platform::containers::vector<ffi_type *> param_types;
-		for(const auto& s_ptype : s_param_types)
-		{
-			printf("%s\n", s_ptype.c_str());
-			// create ffi_type for each parameter's typename and push it to param_types
-			ffi_type* ffi_ptype=get_ffi_type_by_string(s_ptype);
-			param_types.push_back(ffi_ptype);
-		}
-		ffi_cif cif;
-		::ffi_prep_cif(&cif, ffi_abi::FFI_DEFAULT_ABI, YSLib::CheckUpperBound<
-				unsigned>(parameters_number), result_type, param_types.data());
+				ffi_type* result_type=get_ffi_type_by_string(s_ret_type);
+				platform::containers::vector<ffi_type *> param_types;
+				for(const auto& s_ptype : s_param_types)
+				{
+					printf("%s\n", s_ptype.c_str());
+					// create ffi_type for each parameter's typename and push it to param_types
+					ffi_type* ffi_ptype=get_ffi_type_by_string(s_ptype);
+					param_types.push_back(ffi_ptype);
+				}
+				ffi_cif cif;
+				::ffi_prep_cif(&cif, ffi_abi::FFI_DEFAULT_ABI, YSLib::CheckUpperBound<
+						unsigned>(parameters_number), result_type, param_types.data());
 
-		ffi_closure *closure = (ffi_closure *)ffi_closure_alloc(sizeof(ffi_closure), object);
+				ffi_closure *closure = (ffi_closure *)ffi_closure_alloc(sizeof(ffi_closure), object);
 
-		auto* userdata=new ::std::tuple<Unilang::ContextHandler*, platform::containers::vector<platform::strings::string>, platform::strings::string, Unilang::Context*>(&handler,s_param_types,s_ret_type,&ctx);
+				auto* userdata=new ::std::tuple<Unilang::ContextHandler*, platform::containers::vector<platform::strings::string>, platform::strings::string, Unilang::Context*>(&handler,s_param_types,s_ret_type,&ctx);
 
-		ffi_prep_closure_loc(closure, &cif, closureCalled, userdata, nullptr);
+				ffi_prep_closure_loc(closure, &cif, closureCalled, userdata, nullptr);
 
-		printf("after ref\n");
-		printf("object: %d\n", object);
-		printf("*object: %d\n", *object);
+				printf("after ref\n");
+				printf("object: %d\n", object);
+				printf("*object: %d\n", *object);
+				return Unilang::ReductionStatus::Clean;
+			}, std::placeholders::_1, std::move(x), ctx.GetRecordPtr()),
+			"match-ptree"));
+
+
 	}))));
 
 	return 0;
