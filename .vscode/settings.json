@@ -103,6 +103,7 @@
         "string_view": "cpp",
         "__config": "cpp",
         "__debug": "cpp",
-        "__verbose_abort": "cpp"
+        "__verbose_abort": "cpp",
+        "*.def": "cpp"
     }
 }

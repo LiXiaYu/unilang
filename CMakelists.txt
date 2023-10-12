@@ -1,0 +1,39 @@
+project(Unilang)
+cmake_minimum_required(VERSION 3.0)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# if g++
+if(CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-dangling-reference -Wno-ignored-attributes -Wno-uninitialized")
+# if clang++
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-ignored-attributes -Wno-mismatched-tags")
+endif()
+
+
+# set environment variables Unilang_BaseDir="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+set(Unilang_BaseDir "${CMAKE_CURRENT_SOURCE_DIR}")
+set(YSLib_BaseDir "${Unilang_BaseDir}/3rdparty/YSLib")
+set(Unilang_Output "unilang")
+set(Unilang_BuildDir "${Unilang_BaseDir}/build")
+
+
+
+add_library(Unilang SHARED SRCS)
+
+# import Qt5Widgets Qt5Quick
+find_package(Qt5Widgets REQUIRED)
+find_package(Qt5Quick REQUIRED)
+
+# import YSLib
+add_subdirectory(${YSLib_BaseDir} YSLib)
+
+
+# set -e
+# Unilang_BaseDir="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+# YSLib_BaseDir="$Unilang_BaseDir/3rdparty/YSLib"
+# : "${Unilang_Output=unilang}"
+# : "${Unilang_BuildDir="$(dirname "$Unilang_Output")"}"
+
+# start cmakelists.txt
