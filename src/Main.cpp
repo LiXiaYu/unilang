@@ -1558,6 +1558,11 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 
 	int i=0;
 	Unilang::TermNode node_x;
+
+	Unilang::TermNode node_handler;
+	node_handler.SetValue(Unilang::ValueObject(handler));
+	node_x.Add(node_handler);
+
 	for(const auto& s_ptype : s_param_types)
 	{
 		printf("s_ptype: %s\n", s_ptype.c_str());
@@ -1603,7 +1608,9 @@ void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
 		node_r.SetValue(Unilang::ValueObject(realpath));
 
 		printf("rrr: %p\n", r);
-		auto node_result=handler(node_x,ctx);
+
+		auto node_result=Unilang::ReduceCombinedBranch(node_x, ctx);
+
 		printf("rrr: %p\n", r);
 		ret=new int;
 		*((int *)ret)=node_x.Value.GetObject<int>();
