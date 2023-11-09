@@ -18,10 +18,7 @@
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
-            ],
-            "sourceMap": {
-                "/home/zhengyuanbo/Unilang": "${workspaceFolder}"
-            }
+            ]
         },
         {
             // run /home/wangxiaofei/FEBioStudio/bin/febio4 -i ./BPM_base_v4_BPM.feb -import /home/wangxiaofei/.vs/FEBio_VFM_Task/out/build/linux-release/FEBio_VFM_Task/libFEBio_VFM_Task.so -task=VFM vfm_set_BPM_base_v4_BPM.txt
@@ -31,11 +28,11 @@
             "program": "/home/wangxiaofei/FEBioStudio/bin/febio4",
             "args": [
                 "-i",
-                "./BPM_base_v4_BPM.feb",
+                "./BPM_base_v4.feb",
                 "-import",
                 "/home/wangxiaofei/.vs/FEBio_VFM_Task/out/build/linux-release/FEBio_VFM_Task/libFEBio_VFM_Task.so",
                 "-task=VFM",
-                "vfm_set_BPM_base_v4_BPM.txt"
+                "vfm_set_BPM_base_v4.txt"
             ],
             "stopAtEntry": false,
             "cwd": "/home/wangxiaofei/.febio/fe_p_test",

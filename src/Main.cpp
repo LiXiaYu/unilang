@@ -1475,7 +1475,7 @@ main(int argc, char* argv[])
 namespace
 {
 	std::map<platform::strings::string, std::tuple<YSLib::ValueObject, std::function<void(Unilang::BindingMap&)>, std::function<void(Unilang::TermNode&, Unilang::TermNode&, Unilang::Context&)>>> ma_ex;
-
+	std::map<platform::strings::string, std::tuple<Unilang::ContextHandler*, platform::containers::vector<platform::strings::string>, platform::strings::string, Unilang::Context*>> ma_ex_func_p;
 }
 
 ffi_type* get_ffi_type_by_string(const platform::strings::string& s)
@@ -1538,6 +1538,111 @@ extern "C" YF_API int
 unilang_regist_uintptr_t_value(const char* objectname,std::uintptr_t* object)
 {
 	return unilang_regist_type_value(objectname, object);
+}
+
+void closureCalled_1(ffi_cif *cif, void *ret, void **args, void *userdata) {
+	printf("in closure Called \n");
+
+	auto& p_userdata=*(platform::strings::string*)userdata;
+	auto& datas=ma_ex_func_p[p_userdata];
+
+	auto& handler = *::std::get<0>(datas);
+	auto& s_param_types = ::std::get<1>(datas);
+	auto& s_ret_type = ::std::get<2>(datas);
+	auto& ctx = *::std::get<3>(datas);
+
+
+	int i=0;
+	Unilang::TermNode node_x;
+
+	Unilang::TermNode node_handler;
+	node_handler.SetValue(Unilang::ValueObject(handler));
+	node_x.Add(node_handler);
+
+	for(const auto& s_ptype : s_param_types)
+	{
+		printf("s_ptype: %s\n", s_ptype.c_str());
+		Unilang::TermNode node_y;
+		if(s_ptype=="int")
+		{
+			int y;
+			node_y.SetValue(Unilang::ValueObject(y));
+		}
+		else if(s_ptype=="double")
+		{
+			double y;
+			node_y.SetValue(Unilang::ValueObject(y, YSLib::OwnershipTag<>()));
+		}
+		else if(s_ptype=="bool")
+		{
+			bool y;
+			node_y.SetValue(Unilang::ValueObject(y, YSLib::OwnershipTag<>()));
+		}
+		else if(s_ptype=="string")
+		{
+			platform::strings::string y;
+			node_y.SetValue(Unilang::ValueObject(y, YSLib::OwnershipTag<>()));
+		}
+		else if(s_ptype=="uintptr_t")
+		{
+			std::uintptr_t y;
+			node_y.SetValue(Unilang::ValueObject(y, YSLib::OwnershipTag<>()));
+		}
+		else
+		{
+			throw Unilang::UnilangException("Unknown parameter type found.");
+		}
+		node_x.Add(node_y);
+		
+	}
+
+	printf("s_ret_type: %s\n", s_ret_type.c_str());
+	Unilang::TermNode node_r;
+	if(s_ret_type=="int")
+	{
+		int r;
+		node_r.SetValue(Unilang::ValueObject(realpath));
+
+		printf("rrr: %p\n", r);  
+		// 帝球🌏看这里，会报错！！
+		auto node_result=Unilang::ReduceCombinedBranch(node_x, ctx); // 是这样调用ContextHandler的吗？
+
+		printf("rrr: %p\n", r);
+		ret=new int;
+		*((int *)ret)=node_x.Value.GetObject<int>();
+	}
+	else if(s_ret_type=="double")
+	{
+		double r;
+		node_r.SetValue(Unilang::ValueObject(r, YSLib::OwnershipTag<>()));
+
+		auto node_result=handler(node_x,ctx);
+
+		*((double *)ret)=r;
+	}
+	else if(s_ret_type=="bool")
+	{
+		bool r;
+		node_r.SetValue(Unilang::ValueObject(r, YSLib::OwnershipTag<>()));
+
+		auto node_result=handler(node_x,ctx);
+
+		*((bool *)ret)=r;
+	}
+	else if(s_ret_type=="string")
+	{
+		platform::strings::string r;
+		node_r.SetValue(Unilang::ValueObject(r, YSLib::OwnershipTag<>()));
+
+		auto node_result=handler(node_x,ctx);
+
+		ret=new char[r.size()+1];
+		strcpy((char *)ret, r.c_str());
+	}
+	else
+	{
+		throw Unilang::UnilangException("Unknown parameter type found.");
+	}
 }
 
 void closureCalled(ffi_cif *cif, void *ret, void **args, void *userdata) {
@@ -1702,7 +1807,7 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 	platform::strings::string objectname_s(objectname);
 	ma_ex.insert(std::make_pair(objectname_s, std::move(std::forward_as_tuple(object,
 	[objectname_s, object, parameters_number, s_param_types, s_ret_type](Unilang::BindingMap& m){
-		Unilang::RegisterStrict(m, objectname_s, [object, parameters_number, s_param_types, s_ret_type](Unilang::TermNode& term){
+		Unilang::RegisterStrict(m, objectname_s, [object, objectname_s, parameters_number, s_param_types, s_ret_type](Unilang::TermNode& term){
 			void* function=*object;
 			RetainN(term, parameters_number);
 
@@ -1799,6 +1904,16 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 					throw Unilang::UnilangException("Unknown parameter type found.");
 				}
 				//((int(*)(std::uintptr_t,char*,char*))function)(*(std::uintptr_t*)(args[0]),*(char**)(args[1]),*(char**)(args[2]));
+
+				if(ma_ex_func_p.find(objectname_s)==ma_ex_func_p.end())
+				{
+
+				}
+				else
+				{
+					ffi_prep_closure_loc((ffi_closure*)function, &cif, closureCalled_1, const_cast<platform::strings::string*>(&objectname_s), function);
+				}
+
 				printf("function: %d\n", function);
 				ffi_call(&cif, (void (*)())function, result, args);
 				printf("%d\n", *(int*)result);
@@ -1873,7 +1988,7 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 
 		});
 	},
-	[objectname_s, &object, parameters_number, s_param_types, s_ret_type](Unilang::TermNode& x, Unilang::TermNode& y, Unilang::Context& ctx){
+	[objectname_s, object, parameters_number, s_param_types, s_ret_type](Unilang::TermNode& x, Unilang::TermNode& y, Unilang::Context& ctx){
 		printf("object: %d\n", object);
 		printf("*object: %d\n", *object);
 
@@ -1885,10 +2000,10 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 		// set object (void**) function pointer pointer to y
 		//_ReduceCombining(y,ctx);
 		return Unilang::ReduceSubsequent(y, ctx, 
-			Unilang::NameTypedReducerHandler(std::bind([&,s_param_types, s_ret_type](Unilang::Context& ctx,
+			std::bind([object,&y,parameters_number,objectname_s,s_param_types, s_ret_type](Unilang::Context& ctx,
 			const Unilang::TermNode& saved, const std::shared_ptr<Unilang::Environment>& p_e){
 				//auto handler=Unilang::AccessRegular<Unilang::ContextHandler>(y,false);
-				auto& handler=Unilang::AccessRegular<Unilang::ContextHandler>(y,false);
+				auto& handler=y.Value.Access<Unilang::ContextHandler>();
 				Unilang::ContextHandler* phandler=new Unilang::ContextHandler(handler);
 				printf("handler: %p\n", &handler);
 
@@ -1905,18 +2020,20 @@ unilang_regist_function_var(const char* objectname, void** object, const char* r
 				::ffi_prep_cif(&cif, ffi_abi::FFI_DEFAULT_ABI, YSLib::CheckUpperBound<
 						unsigned>(parameters_number), result_type, param_types.data());
 
-				ffi_closure *closure = (ffi_closure *)ffi_closure_alloc(sizeof(ffi_closure), object);
+				void* newIMP;
+				ffi_closure *closure = (ffi_closure *)ffi_closure_alloc(sizeof(ffi_closure), &newIMP);
+				*object=newIMP;
 
-				auto* userdata=new ::std::tuple<Unilang::ContextHandler*, platform::containers::vector<platform::strings::string>, platform::strings::string, Unilang::Context*>(phandler,s_param_types,s_ret_type,&ctx);
+				//auto* userdata=new ::std::tuple<Unilang::ContextHandler*, platform::containers::vector<platform::strings::string>, platform::strings::string, Unilang::Context*>(phandler,s_param_types,s_ret_type,&ctx);
 
-				ffi_prep_closure_loc(closure, &cif, closureCalled, userdata, nullptr);
+				ma_ex_func_p.insert(std::make_pair(objectname_s, std::move(std::forward_as_tuple(phandler,s_param_types,s_ret_type,&ctx))));
+				//auto* userdata=&ma_ex_func_p[objectname_s];
 
 				printf("after ref\n");
 				printf("object: %d\n", object);
 				printf("*object: %d\n", *object);
 				return Unilang::ReductionStatus::Clean;
-			}, std::placeholders::_1, x, ctx.GetRecordPtr()),
-			"match-ptree"));
+			}, std::placeholders::_1, y, ctx.GetRecordPtr()));
 
 
 	}))));
@@ -2177,7 +2294,7 @@ unilang_load_file(char* filename)
 					}
 					else
 						ThrowNonmodifiableErrorForAssignee();
-					return ValueToken::Unspecified;
+					return ReductionStatus::Clean;
 			});
 
 			// Unilang::Forms::RegisterBinary<Strict>(m,"reff<-",[&m](TermNode&& x, TermNode&& y) -> ValueObject{
